@@ -29,9 +29,100 @@ namespace Deadlock_Mod_Loader2 // Make sure this matches your project's namespac
             LoadSavedPath();
         }
 
+        private void patchGameInfoButton_Click(object sender, EventArgs e)
+        {
+            modLoader.PatchGameInfoFile();
+        }
+
+        // ++ NEW ++ This is the code for your new "Restore Backup" button.
+        private void manualRestoreButton_Click(object sender, EventArgs e)
+        {
+            // First, ask the user to confirm this action.
+            var confirmResult = MessageBox.Show("Are you sure you want to restore gameinfo.gi from backup?\nThis will remove all modding configurations and deactivate all mods.",
+                                                  "Confirm Restore",
+                                                  MessageBoxButtons.YesNo,
+                                                  MessageBoxIcon.Warning);
+
+            // Only proceed if the user clicks "Yes".
+            if (confirmResult == DialogResult.Yes)
+            {
+                modLoader.RestoreGameInfoBackup();
+            }
+        }
+
+        private void setPathButton_Click(object sender, EventArgs e)
+        {
+            string pathFromTextBox = gamePathTextBox.Text;
+            if (string.IsNullOrWhiteSpace(pathFromTextBox))
+            {
+                if (sender != this)
+                {
+                    MessageBox.Show("Please enter or browse for the game path.", "Path is empty");
+                }
+                return;
+            }
+            if (modLoader.SetGamePath(pathFromTextBox))
+            {
+                if (sender != this)
+                {
+                    MessageBox.Show("Deadlock path set successfully!", "Success");
+                }
+                SaveGamePath(pathFromTextBox);
+                modLoader.PatchGameInfoFile();
+                RefreshModLists();
+            }
+            else
+            {
+                MessageBox.Show("Invalid Deadlock directory. Please make sure the path is correct.", "Error");
+            }
+        }
+
+        private void moveUpButton_Click(object sender, EventArgs e)
+        {
+            if (activeModsListBox.SelectedItem is ActiveModInfo selectedMod)
+            {
+                int selectedIndex = activeModsListBox.SelectedIndex;
+                if (selectedIndex > 0)
+                {
+                    var list = activeModsListBox.DataSource as List<ActiveModInfo>;
+                    if (list == null) return;
+
+                    var itemToMove = list[selectedIndex];
+                    list.RemoveAt(selectedIndex);
+                    list.Insert(selectedIndex - 1, itemToMove);
+
+                    modLoader.UpdateModSearchPaths(list);
+
+                    RefreshModLists();
+                    activeModsListBox.SelectedIndex = selectedIndex - 1;
+                }
+            }
+        }
+
+        private void moveDownButton_Click(object sender, EventArgs e)
+        {
+            if (activeModsListBox.SelectedItem is ActiveModInfo selectedMod)
+            {
+                int selectedIndex = activeModsListBox.SelectedIndex;
+                var list = activeModsListBox.DataSource as List<ActiveModInfo>;
+                if (list == null) return;
+
+                if (selectedIndex < list.Count - 1)
+                {
+                    var itemToMove = list[selectedIndex];
+                    list.RemoveAt(selectedIndex);
+                    list.Insert(selectedIndex + 1, itemToMove);
+
+                    modLoader.UpdateModSearchPaths(list);
+
+                    RefreshModLists();
+                    activeModsListBox.SelectedIndex = selectedIndex + 1;
+                }
+            }
+        }
+
         private void RefreshModLists()
         {
-            // Store the currently selected items to re-select them after refresh
             var selectedAvailable = availableModsListBox.SelectedItem as ModInfo;
             var selectedActive = activeModsListBox.SelectedItem as ActiveModInfo;
             int selectedActiveIndex = activeModsListBox.SelectedIndex;
@@ -46,14 +137,12 @@ namespace Deadlock_Mod_Loader2 // Make sure this matches your project's namespac
             activeModsListBox.DataSource = activeMods;
             activeModsListBox.DisplayMember = "ModName";
 
-            // Attempt to re-select the previously selected available mod
             if (selectedAvailable != null)
             {
                 var reselectAvailable = availableMods.FirstOrDefault(m => m.FolderName == selectedAvailable.FolderName);
                 if (reselectAvailable != null) availableModsListBox.SelectedItem = reselectAvailable;
             }
 
-            // Attempt to re-select the previously selected active mod by its original index
             if (selectedActive != null)
             {
                 if (selectedActiveIndex >= 0 && selectedActiveIndex < activeModsListBox.Items.Count)
@@ -161,50 +250,6 @@ namespace Deadlock_Mod_Loader2 // Make sure this matches your project's namespac
             }
         }
 
-        // ++ IMPLEMENTED ++
-        private void moveUpButton_Click(object sender, EventArgs e)
-        {
-            if (activeModsListBox.SelectedItem is ActiveModInfo selectedMod)
-            {
-                int selectedIndex = activeModsListBox.SelectedIndex;
-                if (selectedIndex > 0)
-                {
-                    var list = activeModsListBox.DataSource as List<ActiveModInfo>;
-                    if (list == null) return;
-
-                    var itemToMove = list[selectedIndex];
-                    list.RemoveAt(selectedIndex);
-                    list.Insert(selectedIndex - 1, itemToMove);
-
-                    modLoader.UpdateActiveModsOrder(list);
-                    RefreshModLists();
-                    activeModsListBox.SelectedIndex = selectedIndex - 1;
-                }
-            }
-        }
-
-        // ++ IMPLEMENTED ++
-        private void moveDownButton_Click(object sender, EventArgs e)
-        {
-            if (activeModsListBox.SelectedItem is ActiveModInfo selectedMod)
-            {
-                int selectedIndex = activeModsListBox.SelectedIndex;
-                var list = activeModsListBox.DataSource as List<ActiveModInfo>;
-                if (list == null) return;
-
-                if (selectedIndex < list.Count - 1)
-                {
-                    var itemToMove = list[selectedIndex];
-                    list.RemoveAt(selectedIndex);
-                    list.Insert(selectedIndex + 1, itemToMove);
-
-                    modLoader.UpdateActiveModsOrder(list);
-                    RefreshModLists();
-                    activeModsListBox.SelectedIndex = selectedIndex + 1;
-                }
-            }
-        }
-
         #region UI, Styling, and Path Management
 
         private void Form1_Paint(object sender, PaintEventArgs e)
@@ -287,34 +332,6 @@ namespace Deadlock_Mod_Loader2 // Make sure this matches your project's namespac
             }
         }
 
-        private void setPathButton_Click(object sender, EventArgs e)
-        {
-            string pathFromTextBox = gamePathTextBox.Text;
-            if (string.IsNullOrWhiteSpace(pathFromTextBox))
-            {
-                if (sender != this)
-                {
-                    MessageBox.Show("Please enter or browse for the game path.", "Path is empty");
-                }
-                return;
-            }
-            if (modLoader.SetGamePath(pathFromTextBox))
-            {
-                if (sender != this)
-                {
-                    // -- FIXED -- Removed the duplicate message box that was here
-                    MessageBox.Show("Deadlock path set successfully!", "Success");
-                }
-                SaveGamePath(pathFromTextBox);
-                modLoader.InitialSetup();
-                RefreshModLists();
-            }
-            else
-            {
-                MessageBox.Show("Invalid Deadlock directory. Please make sure the path is correct.", "Error");
-            }
-        }
-
         private void openAddonsFolderButton_Click(object sender, EventArgs e)
         {
             string addonsPath = modLoader.GetAddonsPath();
@@ -342,6 +359,12 @@ namespace Deadlock_Mod_Loader2 // Make sure this matches your project's namespac
         {
             // This event handler appears to be a duplicate and is unused.
             // You can likely delete it from the code and from the event handler list in the designer.
+        }
+
+        private void importModsButton_Click(object sender, EventArgs e)
+        {
+            modLoader.ImportUnmanagedMods();
+            RefreshModLists();
         }
     }
 }

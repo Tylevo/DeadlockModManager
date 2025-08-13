@@ -46,72 +46,361 @@ namespace Deadlock_Mod_Loader2
             {
                 gamePath = path;
                 activeModsPath = Path.Combine(gamePath, "citadel", "addons");
-                if (!Directory.Exists(activeModsPath))
-                    Directory.CreateDirectory(activeModsPath);
-
                 manifestPath = Path.Combine(activeModsPath, "active_mods.json");
                 catalogPath = Path.Combine(activeModsPath, "mods_catalog.json");
                 gameInfoPath = Path.Combine(gamePath, "citadel", "gameinfo.gi");
 
-                if (!File.Exists(manifestPath)) SaveManifest(new List<ActiveModInfo>());
-                if (!File.Exists(catalogPath)) SaveCatalog(new List<ModInfo>());
+                if (Directory.Exists(activeModsPath))
+                {
+                    if (!File.Exists(manifestPath)) SaveManifest(new List<ActiveModInfo>());
+                    if (!File.Exists(catalogPath)) SaveCatalog(new List<ModInfo>());
+                }
 
                 return true;
             }
             return false;
         }
 
-        private sealed class VpkGroup
+        // ++ CHANGED ++ This method is now much more robust and handles loose VPK files.
+        public void ImportUnmanagedMods()
         {
-            public string BaseName;
-            public List<string> Files = new List<string>();
-        }
-
-        private List<VpkGroup> FindVpkGroups(IEnumerable<string> vpkPaths)
-        {
-            var groups = new Dictionary<string, VpkGroup>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var path in vpkPaths)
+            if (string.IsNullOrEmpty(activeModsPath) || !Directory.Exists(activeModsPath))
             {
-                string file = Path.GetFileName(path);
-                string baseName = null;
+                MessageBox.Show("Addons path is not set or does not exist.", "Error");
+                return;
+            }
 
-                if (file.EndsWith("_dir.vpk", StringComparison.OrdinalIgnoreCase))
+            int importedCount = 0;
+
+            // --- Part 1: Find and organize any loose VPK files ---
+            var looseVpks = Directory.GetFiles(activeModsPath, "*.vpk", SearchOption.TopDirectoryOnly).ToList();
+            if (looseVpks.Any())
+            {
+                var vpkGroups = FindVpkGroups(looseVpks);
+                foreach (var group in vpkGroups)
                 {
-                    baseName = file.Substring(0, file.Length - "_dir.vpk".Length);
-                }
-                else if (file.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase))
-                {
-                    int us = file.LastIndexOf('_');
-                    if (us > 0)
+                    // Generate a name and folder for this group of loose files
+                    string modName = group.BaseName.Replace("_", " ").Replace("-", " ");
+                    modName = Regex.Replace(modName, @"\s+", " ").Trim();
+                    string folderName = MakeSafeIdentifier(modName);
+
+                    string newModSubFolder = Path.Combine(activeModsPath, folderName);
+
+                    // In case a folder with this name already exists, add a suffix
+                    int suffix = 1;
+                    while (Directory.Exists(newModSubFolder))
                     {
-                        string suffix = file.Substring(us + 1);
-                        if (suffix.Length == 7 &&
-                            char.IsDigit(suffix[0]) && char.IsDigit(suffix[1]) && char.IsDigit(suffix[2]) &&
-                            suffix[3] == '.' &&
-                            suffix.EndsWith("vpk", StringComparison.OrdinalIgnoreCase))
+                        newModSubFolder = Path.Combine(activeModsPath, $"{folderName}_{suffix++}");
+                    }
+                    Directory.CreateDirectory(newModSubFolder);
+
+                    // Move the loose files into their new home
+                    foreach (var vpkFile in group.Files)
+                    {
+                        try
                         {
-                            baseName = file.Substring(0, us);
+                            string destFile = Path.Combine(newModSubFolder, Path.GetFileName(vpkFile));
+                            File.Move(vpkFile, destFile);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Could not move loose file '{Path.GetFileName(vpkFile)}'. It may be in use.\n\nError: {ex.Message}", "Import Warning");
                         }
                     }
                 }
-
-                if (baseName == null && file.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase))
-                {
-                    baseName = Path.GetFileNameWithoutExtension(file);
-                }
-
-                if (baseName == null) continue;
-
-                if (!groups.TryGetValue(baseName, out var g))
-                {
-                    g = new VpkGroup { BaseName = baseName };
-                    groups[baseName] = g;
-                }
-                g.Files.Add(path);
             }
 
-            return groups.Values.ToList();
+            // --- Part 2: Discover and process all unmanaged folders (including newly created ones) ---
+            var manifest = LoadManifest();
+            var catalog = LoadCatalog();
+            var managedFolders = manifest.Select(m => m.OriginalFolderName)
+                                        .Concat(catalog.Select(c => c.FolderName))
+                                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var allDirectories = Directory.GetDirectories(activeModsPath);
+            var unmanagedDirs = allDirectories.Where(dir => !managedFolders.Contains(Path.GetFileName(dir))).ToList();
+
+            foreach (var dir in unmanagedDirs)
+            {
+                if (ProcessModContents(dir, dir))
+                {
+                    importedCount++;
+                }
+            }
+
+            if (importedCount > 0)
+            {
+                MessageBox.Show($"{importedCount} pre-existing mod(s) were successfully imported into the library.", "Import Complete");
+            }
+            else
+            {
+                MessageBox.Show("No unmanaged mods found to import.", "Import");
+            }
+        }
+
+
+        public void RestoreGameInfoBackup()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(gameInfoPath))
+                {
+                    MessageBox.Show("Game path is not set.", "Error");
+                    return;
+                }
+
+                string backupPath = gameInfoPath + ".bak";
+                if (File.Exists(backupPath))
+                {
+                    File.Copy(backupPath, gameInfoPath, true);
+                    MessageBox.Show("Successfully restored gameinfo.gi from backup. Any modding changes have been removed.", "Restore Successful");
+                }
+                else
+                {
+                    MessageBox.Show("No backup file (gameinfo.gi.bak) was found. Please verify game files in Steam to restore.", "Backup Not Found");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to restore backup: {ex.Message}", "Error");
+            }
+        }
+
+        public bool PatchGameInfoFile()
+        {
+            try
+            {
+                if (!Directory.Exists(activeModsPath))
+                {
+                    Directory.CreateDirectory(activeModsPath);
+                }
+
+                if (string.IsNullOrWhiteSpace(gameInfoPath) || !File.Exists(gameInfoPath))
+                {
+                    MessageBox.Show("gameinfo.gi not found. Please ensure the game path is correct.", "Error");
+                    return false;
+                }
+
+                string backupPath = gameInfoPath + ".bak";
+                if (!File.Exists(backupPath))
+                {
+                    File.Copy(gameInfoPath, backupPath);
+                }
+
+                string content = File.ReadAllText(gameInfoPath);
+                bool needsUpdate = false;
+
+                var requiredSearchPaths = new List<string>
+                {
+                    "Game\t\t\tcitadel/addons",
+                    "Game\t\t\tcitadel",
+                    "Write\t\t\tcitadel",
+                    "Mod\t\t\tcitadel",
+                    "Game\t\t\tcore",
+                    "Write\t\t\tcore",
+                    "Mod\t\t\tcore"
+                };
+
+                var searchPathRegex = new Regex(@"(^\s*""?SearchPaths""?\s*\{)([\s\S]*?)(\s*\})", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                var searchPathMatch = searchPathRegex.Match(content);
+
+                if (searchPathMatch.Success)
+                {
+                    string existingPaths = searchPathMatch.Groups[2].Value;
+                    var pathsToAdd = new StringBuilder();
+
+                    foreach (var requiredPath in requiredSearchPaths)
+                    {
+                        var pathParts = requiredPath.Split(new[] { '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        var key = pathParts[0].Trim();
+                        var value = pathParts[1].Trim();
+                        var pathPattern = new Regex($@"^\s*{Regex.Escape(key)}\s+""?{Regex.Escape(value)}""?\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                        if (!pathPattern.IsMatch(existingPaths))
+                        {
+                            pathsToAdd.AppendLine($"\t\t{key}\t\t\t{value}");
+                            needsUpdate = true;
+                        }
+                    }
+
+                    if (pathsToAdd.Length > 0)
+                    {
+                        content = content.Insert(searchPathMatch.Groups[1].Index + searchPathMatch.Groups[1].Length, "\n" + pathsToAdd.ToString());
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Could not find 'SearchPaths' block in gameinfo.gi. Please verify game files in Steam.", "Error");
+                    return false;
+                }
+
+                var addonConfigRegex = new Regex(@"^\s*""?AddonConfig""?\s*\{[\s\S]*?\}", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                if (!addonConfigRegex.IsMatch(content))
+                {
+                    string addonConfigBlock = "\n\tAddonConfig\n\t{\n\t\t\"UseOfficialAddons\" \"1\"\n\t}\n";
+                    var fileSystemRegex = new Regex(@"(^\s*""?FileSystem""?\s*\{[\s\S]*?\s*\})", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                    var fsMatch = fileSystemRegex.Match(content);
+                    if (fsMatch.Success)
+                    {
+                        content = content.Insert(fsMatch.Index + fsMatch.Length, addonConfigBlock);
+                        needsUpdate = true;
+                    }
+                }
+
+                if (needsUpdate)
+                {
+                    File.WriteAllText(gameInfoPath, content, new UTF8Encoding(false));
+                    MessageBox.Show("gameinfo.gi has been successfully updated for modding!", "Success");
+                }
+                else
+                {
+                    MessageBox.Show("gameinfo.gi is already configured correctly. No changes were made.", "All Good!");
+                }
+
+                UpdateModSearchPaths(LoadManifest());
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while patching gameinfo.gi. Please try running as administrator.\n\nError: {ex.Message}", "Patch Failed");
+                return false;
+            }
+        }
+
+        public void UpdateModSearchPaths(List<ActiveModInfo> orderedMods)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(gameInfoPath) || !File.Exists(gameInfoPath)) return;
+
+                SaveManifest(orderedMods);
+
+                string content = File.ReadAllText(gameInfoPath);
+
+                var modPaths = new StringBuilder();
+                foreach (var mod in orderedMods)
+                {
+                    modPaths.AppendLine($"\t\tGame\t\t\tcitadel/addons/{mod.OriginalFolderName}");
+                }
+
+                string modPathPattern = @"^\s*Game\s+""?citadel/addons/.*""?\s*$";
+
+                var searchPathRegex = new Regex(@"(^\s*""?SearchPaths""?\s*\{)([\s\S]*?)(\s*\})", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                var searchPathMatch = searchPathRegex.Match(content);
+
+                if (searchPathMatch.Success)
+                {
+                    string existingPaths = searchPathMatch.Groups[2].Value;
+                    string cleanedPaths = Regex.Replace(existingPaths, modPathPattern, "", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+                    cleanedPaths = string.Join("\n", cleanedPaths.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)));
+
+                    string newPathsBlock = modPaths.ToString() + cleanedPaths;
+                    string newSearchPathsBlock = searchPathMatch.Groups[1].Value + "\n" + newPathsBlock + "\n" + searchPathMatch.Groups[3].Value;
+                    string newContent = content.Replace(searchPathMatch.Value, newSearchPathsBlock);
+
+                    File.WriteAllText(gameInfoPath, newContent, new UTF8Encoding(false));
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to update mod load order: {ex.Message}", "Error");
+            }
+        }
+
+        public void ActivateMod(ModInfo modToActivate)
+        {
+            var manifest = LoadManifest();
+            if (manifest.Any(m => m.OriginalFolderName.Equals(modToActivate.FolderName, StringComparison.OrdinalIgnoreCase)))
+            {
+                MessageBox.Show("This mod is already active.", "Warning");
+                return;
+            }
+
+            string modSubFolderPath = Path.Combine(activeModsPath, modToActivate.FolderName);
+            if (!Directory.Exists(modSubFolderPath)) Directory.CreateDirectory(modSubFolderPath);
+
+            string searchPattern = DisabledPrefix + modToActivate.FolderName + ModSep + "*.vpk";
+            var disabledFiles = Directory.GetFiles(activeModsPath, searchPattern);
+
+            if (disabledFiles.Length == 0)
+            {
+                MessageBox.Show("No disabled files found for this mod. Try reinstalling it.", "Activate Warning");
+                return;
+            }
+
+            var prefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var df in disabledFiles)
+            {
+                string fileName = Path.GetFileName(df);
+                string expectedPrefix = DisabledPrefix + modToActivate.FolderName + ModSep;
+                if (fileName.StartsWith(expectedPrefix))
+                {
+                    string tail = fileName.Substring(expectedPrefix.Length);
+                    string prefix = ExtractPakPrefixFromTail(tail);
+                    if (!string.IsNullOrEmpty(prefix)) prefixes.Add(prefix);
+
+                    try
+                    {
+                        string activeName = tail;
+                        string dst = Path.Combine(modSubFolderPath, activeName);
+
+                        if (File.Exists(dst)) File.Delete(dst);
+                        File.Move(df, dst);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to activate file '{fileName}': {ex.Message}", "Activation Error");
+                        return;
+                    }
+                }
+            }
+
+            var entry = new ActiveModInfo
+            {
+                ModName = modToActivate.Name,
+                OriginalFolderName = modToActivate.FolderName,
+                PakPrefixes = prefixes.ToList()
+            };
+
+            manifest.Add(entry);
+            UpdateModSearchPaths(manifest);
+        }
+
+        public void DeactivateMod(ActiveModInfo modToDeactivate)
+        {
+            var manifest = LoadManifest();
+            var modInManifest = manifest.FirstOrDefault(m => m.OriginalFolderName.Equals(modToDeactivate.OriginalFolderName, StringComparison.OrdinalIgnoreCase));
+            if (modInManifest == null) return;
+
+            string modSubFolderPath = Path.Combine(activeModsPath, modToDeactivate.OriginalFolderName);
+            if (Directory.Exists(modSubFolderPath))
+            {
+                foreach (var file in Directory.GetFiles(modSubFolderPath, "*.vpk"))
+                {
+                    try
+                    {
+                        string activeName = Path.GetFileName(file);
+                        string disabledName = DisabledName(modInManifest.OriginalFolderName, activeName);
+                        string dst = Path.Combine(activeModsPath, disabledName);
+
+                        if (File.Exists(dst)) File.Delete(dst);
+                        File.Move(file, dst);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to deactivate file '{Path.GetFileName(file)}': {ex.Message}", "Deactivation Error");
+                        return;
+                    }
+                }
+                if (!Directory.EnumerateFileSystemEntries(modSubFolderPath).Any())
+                {
+                    Directory.Delete(modSubFolderPath);
+                }
+            }
+
+            manifest.Remove(modInManifest);
+            UpdateModSearchPaths(manifest);
         }
 
         #region Helper and Management Methods
@@ -169,40 +458,45 @@ namespace Deadlock_Mod_Loader2
 
         public bool InstallDroppedFile(string filePath)
         {
-            string tempDir = Path.Combine(Path.GetTempPath(), "DeadlockModLoader_" + Guid.NewGuid().ToString("N"));
+            bool isDirectory = File.GetAttributes(filePath).HasFlag(FileAttributes.Directory);
+            string tempDir = isDirectory ? filePath : Path.Combine(Path.GetTempPath(), "DeadlockModLoader_" + Guid.NewGuid().ToString("N"));
+
             try
             {
-                Directory.CreateDirectory(tempDir);
-                string extension = Path.GetExtension(filePath).ToLowerInvariant();
+                if (!isDirectory)
+                {
+                    Directory.CreateDirectory(tempDir);
+                    string extension = Path.GetExtension(filePath).ToLowerInvariant();
 
-                if (extension == ".zip")
-                {
-                    ZipFile.ExtractToDirectory(filePath, tempDir);
-                }
-                else if (extension == ".rar")
-                {
-                    if (!ExtractRarFile(filePath, tempDir))
+                    if (extension == ".zip")
                     {
-                        MessageBox.Show("RAR extraction failed. Please install WinRAR or 7-Zip, or convert to ZIP format.", "RAR Extraction Error");
+                        ZipFile.ExtractToDirectory(filePath, tempDir);
+                    }
+                    else if (extension == ".rar")
+                    {
+                        if (!ExtractRarFile(filePath, tempDir))
+                        {
+                            MessageBox.Show("RAR extraction failed. Please install WinRAR or 7-Zip, or convert to ZIP format.", "RAR Extraction Error");
+                            return false;
+                        }
+                    }
+                    else if (extension == ".7z")
+                    {
+                        if (!Extract7ZipFile(filePath, tempDir))
+                        {
+                            MessageBox.Show("7Z extraction failed. Please install 7-Zip or convert to ZIP format.", "7Z Extraction Error");
+                            return false;
+                        }
+                    }
+                    else if (extension == ".vpk")
+                    {
+                        File.Copy(filePath, Path.Combine(tempDir, Path.GetFileName(filePath)));
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Unsupported file format: {extension}\nSupported formats: .zip, .rar, .7z, .vpk", "Unsupported Format");
                         return false;
                     }
-                }
-                else if (extension == ".7z")
-                {
-                    if (!Extract7ZipFile(filePath, tempDir))
-                    {
-                        MessageBox.Show("7Z extraction failed. Please install 7-Zip or convert to ZIP format.", "7Z Extraction Error");
-                        return false;
-                    }
-                }
-                else if (extension == ".vpk")
-                {
-                    File.Copy(filePath, Path.Combine(tempDir, Path.GetFileName(filePath)));
-                }
-                else
-                {
-                    MessageBox.Show($"Unsupported file format: {extension}\nSupported formats: .zip, .rar, .7z, .vpk", "Unsupported Format");
-                    return false;
                 }
 
                 return ProcessModContents(tempDir, filePath);
@@ -214,7 +508,7 @@ namespace Deadlock_Mod_Loader2
             }
             finally
             {
-                if (Directory.Exists(tempDir))
+                if (!isDirectory && Directory.Exists(tempDir))
                 {
                     Directory.Delete(tempDir, true);
                 }
@@ -225,7 +519,6 @@ namespace Deadlock_Mod_Loader2
         {
             try
             {
-                // Try WinRAR first
                 string winrarPath = @"C:\Program Files\WinRAR\WinRAR.exe";
                 if (!File.Exists(winrarPath))
                     winrarPath = @"C:\Program Files (x86)\WinRAR\WinRAR.exe";
@@ -249,7 +542,6 @@ namespace Deadlock_Mod_Loader2
                     }
                 }
 
-                // Try 7-Zip as fallback
                 string sevenZipPath = @"C:\Program Files\7-Zip\7z.exe";
                 if (!File.Exists(sevenZipPath))
                     sevenZipPath = @"C:\Program Files (x86)\7-Zip\7z.exe";
@@ -320,10 +612,8 @@ namespace Deadlock_Mod_Loader2
         {
             var modInfo = new ModInfo();
 
-            // Look for modinfo.json (most flexible naming)
             string modJsonPath = Directory.GetFiles(tempDir, "modinfo.json", SearchOption.AllDirectories).FirstOrDefault();
 
-            // Also look for other common mod info file names
             if (string.IsNullOrEmpty(modJsonPath))
             {
                 var commonNames = new[] { "mod.json", "info.json", "addon.json" };
@@ -351,31 +641,27 @@ namespace Deadlock_Mod_Loader2
                 return false;
             }
 
-            // Enhanced filename parsing for mod name generation
             if (string.IsNullOrWhiteSpace(modInfo.Name))
             {
-                string fileName = Path.GetFileNameWithoutExtension(originalFilePath);
-                string modName = fileName;
+                string fileName = Path.GetFileName(originalFilePath);
+                string modName = Path.GetFileNameWithoutExtension(fileName);
 
-                // Pattern 1: "pak04_dir - Health Bar (Vertical)" 
-                int separatorIndex = fileName.IndexOf(" - ");
+                int separatorIndex = modName.IndexOf(" - ");
                 if (separatorIndex > 0)
                 {
-                    modName = fileName.Substring(separatorIndex + 3).Trim();
+                    modName = modName.Substring(separatorIndex + 3).Trim();
                 }
-                // Pattern 2: "ModName_v1.2.3" (remove version info)
-                else if (Regex.IsMatch(fileName, @"_v?\d+(\.\d+)*$"))
+                else if (Regex.IsMatch(modName, @"_v?\d+(\.\d+)*$"))
                 {
-                    modName = Regex.Replace(fileName, @"_v?\d+(\.\d+)*$", "");
+                    modName = Regex.Replace(modName, @"_v?\d+(\.\d+)*$", "");
                 }
-                // Pattern 3: "ModName by Author" 
-                else if (fileName.Contains(" by "))
+                else if (modName.Contains(" by "))
                 {
-                    modName = fileName.Substring(0, fileName.IndexOf(" by "));
+                    modName = modName.Substring(0, modName.IndexOf(" by "));
                 }
 
                 modName = modName.Replace("_", " ").Replace("-", " ");
-                modName = Regex.Replace(modName, @"\s+", " ").Trim(); // Remove extra spaces
+                modName = Regex.Replace(modName, @"\s+", " ").Trim();
                 modInfo.Name = modName;
             }
 
@@ -405,12 +691,27 @@ namespace Deadlock_Mod_Loader2
                 string pakPrefix = GetNextPakPrefix(taken);
                 taken.Add(pakPrefix);
 
+                Action<string, string> fileOperation = (src, dest) =>
+                {
+                    if (File.Exists(dest)) File.Delete(dest);
+                    File.Move(src, dest);
+                };
+                if (tempDir != originalFilePath)
+                {
+                    fileOperation = (src, dest) =>
+                    {
+                        if (File.Exists(dest)) File.Delete(dest);
+                        File.Copy(src, dest);
+                    };
+                }
+
+
                 if (group.Files.Count == 1)
                 {
                     string newFileName = pakPrefix + "_dir.vpk";
                     string disabledName = DisabledName(modInfo.FolderName, newFileName);
                     string dst = Path.Combine(activeModsPath, disabledName);
-                    File.Copy(group.Files.First(), dst, overwrite: true);
+                    fileOperation(group.Files.First(), dst);
                 }
                 else
                 {
@@ -433,7 +734,7 @@ namespace Deadlock_Mod_Loader2
 
                         string disabledName = DisabledName(modInfo.FolderName, newFileName);
                         string dst = Path.Combine(activeModsPath, disabledName);
-                        File.Copy(srcFile, dst, overwrite: true);
+                        fileOperation(srcFile, dst);
                     }
                 }
             }
@@ -452,12 +753,70 @@ namespace Deadlock_Mod_Loader2
             }
             SaveCatalog(catalog);
 
+            if (tempDir == originalFilePath && !Directory.EnumerateFileSystemEntries(tempDir).Any())
+            {
+                Directory.Delete(tempDir);
+            }
+
             return true;
+        }
+
+        private sealed class VpkGroup
+        {
+            public string BaseName;
+            public List<string> Files = new List<string>();
+        }
+
+        private List<VpkGroup> FindVpkGroups(IEnumerable<string> vpkPaths)
+        {
+            var groups = new Dictionary<string, VpkGroup>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var path in vpkPaths)
+            {
+                string file = Path.GetFileName(path);
+                string baseName = null;
+
+                if (file.EndsWith("_dir.vpk", StringComparison.OrdinalIgnoreCase))
+                {
+                    baseName = file.Substring(0, file.Length - "_dir.vpk".Length);
+                }
+                else if (file.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase))
+                {
+                    int us = file.LastIndexOf('_');
+                    if (us > 0)
+                    {
+                        string suffix = file.Substring(us + 1);
+                        if (suffix.Length == 7 &&
+                            char.IsDigit(suffix[0]) && char.IsDigit(suffix[1]) && char.IsDigit(suffix[2]) &&
+                            suffix[3] == '.' &&
+                            suffix.EndsWith("vpk", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseName = file.Substring(0, us);
+                        }
+                    }
+                }
+
+                if (baseName == null && file.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase))
+                {
+                    baseName = Path.GetFileNameWithoutExtension(file);
+                }
+
+                if (baseName == null) continue;
+
+                if (!groups.TryGetValue(baseName, out var g))
+                {
+                    g = new VpkGroup { BaseName = baseName };
+                    groups[baseName] = g;
+                }
+                g.Files.Add(path);
+            }
+
+            return groups.Values.ToList();
         }
 
         private static string MakeSafeIdentifier(string name)
         {
-            var sanitized = Regex.Replace(name, @"[^\w\-_\s]", ""); // Keep only word chars, hyphens, underscores, and spaces
+            var sanitized = Regex.Replace(name, @"[^\w\-_\s]", "");
             var chars = sanitized.Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_').ToArray();
             var id = new string(chars).Trim('_');
 
@@ -512,6 +871,7 @@ namespace Deadlock_Mod_Loader2
                     taken.Add(p);
             return taken;
         }
+
 
         private static string ExtractPakPrefixFromTail(string fileName)
         {
@@ -587,249 +947,6 @@ namespace Deadlock_Mod_Loader2
                 return false;
             }
         }
-
-        public void ActivateMod(ModInfo modToActivate)
-        {
-            var manifest = LoadManifest();
-            if (manifest.Any(m => m.OriginalFolderName.Equals(modToActivate.FolderName, StringComparison.OrdinalIgnoreCase)))
-            {
-                MessageBox.Show("This mod is already active.", "Warning");
-                return;
-            }
-
-            string searchPattern = DisabledPrefix + modToActivate.FolderName + ModSep + "*.vpk";
-            var disabledFiles = Directory.GetFiles(activeModsPath, searchPattern);
-
-            if (disabledFiles.Length == 0)
-            {
-                MessageBox.Show("No disabled files found in addons for this mod. Try reinstalling.", "Activate Warning");
-                return;
-            }
-
-            var prefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var df in disabledFiles)
-            {
-                string fileName = Path.GetFileName(df);
-                string expectedPrefix = DisabledPrefix + modToActivate.FolderName + ModSep;
-                if (fileName.StartsWith(expectedPrefix))
-                {
-                    string tail = fileName.Substring(expectedPrefix.Length);
-                    string prefix = ExtractPakPrefixFromTail(tail);
-                    if (!string.IsNullOrEmpty(prefix))
-                    {
-                        prefixes.Add(prefix);
-                    }
-                }
-            }
-
-            if (prefixes.Count == 0)
-            {
-                MessageBox.Show($"Unable to determine VPK groups for this mod. Files found: {string.Join(", ", disabledFiles.Select(Path.GetFileName))}", "Activate Warning");
-                return;
-            }
-
-            var entry = new ActiveModInfo
-            {
-                ModName = modToActivate.Name,
-                OriginalFolderName = modToActivate.FolderName,
-                PakPrefixes = prefixes.ToList()
-            };
-
-            foreach (var prefix in entry.PakPrefixes)
-            {
-                foreach (var file in EnumGroupFiles(prefix, disabled: true, folderName: modToActivate.FolderName))
-                {
-                    try
-                    {
-                        string disabledFileName = Path.GetFileName(file);
-                        string expectedPrefix = DisabledPrefix + modToActivate.FolderName + ModSep;
-                        string activeName = disabledFileName.Substring(expectedPrefix.Length);
-                        string dst = Path.Combine(activeModsPath, activeName);
-
-                        if (File.Exists(dst)) File.Delete(dst);
-                        File.Move(file, dst);
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Failed to activate file '{Path.GetFileName(file)}': {ex.Message}", "Activation Error");
-                        return;
-                    }
-                }
-            }
-
-            manifest.Add(entry);
-            // UPDATED: Call new method to handle manifest saving and gameinfo.gi update
-            UpdateActiveModsOrder(manifest);
-        }
-
-        public void DeactivateMod(ActiveModInfo modToDeactivate)
-        {
-            var manifest = LoadManifest();
-            var modInManifest = manifest.FirstOrDefault(m => m.OriginalFolderName.Equals(modToDeactivate.OriginalFolderName, StringComparison.OrdinalIgnoreCase));
-            if (modInManifest == null) return;
-
-            foreach (var prefix in modInManifest.PakPrefixes)
-            {
-                foreach (var file in EnumGroupFiles(prefix, disabled: false, folderName: null))
-                {
-                    try
-                    {
-                        string activeName = Path.GetFileName(file);
-                        string disabledName = DisabledName(modInManifest.OriginalFolderName, activeName);
-                        string dst = Path.Combine(activeModsPath, disabledName);
-
-                        if (File.Exists(dst)) File.Delete(dst);
-                        File.Move(file, dst);
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Failed to deactivate file '{Path.GetFileName(file)}': {ex.Message}", "Deactivation Error");
-                        return;
-                    }
-                }
-            }
-
-            manifest.Remove(modInManifest);
-            // UPDATED: Call new method to handle manifest saving and gameinfo.gi update
-            UpdateActiveModsOrder(manifest);
-        }
-
-        // NEW METHOD: Updates the manifest and gameinfo.gi based on a new mod order.
-        public void UpdateActiveModsOrder(List<ActiveModInfo> orderedMods)
-        {
-            SaveManifest(orderedMods);
-            UpdateGameInfoSearchPaths();
-        }
-
-        // NEW METHOD: Rewrites the SearchPaths block in gameinfo.gi based on the active mods list.
-        public void UpdateGameInfoSearchPaths()
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(gameInfoPath) || !File.Exists(gameInfoPath)) return;
-
-                string content = ReadFileWithoutBOM(gameInfoPath);
-                var activeMods = LoadManifest();
-
-                // The last mod in the UI list should have the highest priority.
-                // In Source Engine, the FIRST path in the list wins.
-                // So, we do NOT reverse the list. The top of the UI list is the first path written.
-                // To give something higher priority, the user moves it UP the list.
-
-                var newSearchPathsBlock = new StringBuilder();
-                newSearchPathsBlock.AppendLine("\tSearchPaths");
-                newSearchPathsBlock.AppendLine("\t{");
-
-                // Add each active mod's path in the user-defined order
-                foreach (var mod in activeMods)
-                {
-                    // Assuming OriginalFolderName is a safe, single-directory name for the path
-                    newSearchPathsBlock.AppendLine($"\t\tGame\t\t\tcitadel/addons/{mod.OriginalFolderName}");
-                }
-
-                // Add the default game paths AFTER the mods
-                newSearchPathsBlock.AppendLine("\t\tGame\t\t\tcitadel/addons");
-                newSearchPathsBlock.AppendLine("\t\tGame\t\t\tcitadel");
-                newSearchPathsBlock.AppendLine("\t\tWrite\t\t\tcitadel");
-                newSearchPathsBlock.AppendLine("\t\tGame\t\t\tcore");
-                newSearchPathsBlock.AppendLine("\t\tWrite\t\t\tcore");
-                newSearchPathsBlock.AppendLine("\t\tMod\t\t\tcore");
-                newSearchPathsBlock.AppendLine("\t}");
-
-                string pattern = @"(SearchPaths\s*\{[\s\S]*?\})";
-                string newContent;
-
-                if (Regex.IsMatch(content, pattern, RegexOptions.IgnoreCase))
-                {
-                    newContent = Regex.Replace(content, pattern, newSearchPathsBlock.ToString(), RegexOptions.IgnoreCase);
-                }
-                else
-                {
-                    // Fallback if SearchPaths doesn't exist at all, use the robust initial setup logic
-                    newContent = ModifyGameInfoContent(content);
-                }
-
-                WriteFileWithoutBOM(gameInfoPath, newContent);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to update gameinfo.gi: {ex.Message}", "Error");
-            }
-        }
-
-        public void InitialSetup()
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(gameInfoPath) || !File.Exists(gameInfoPath))
-                {
-                    MessageBox.Show("gameinfo.gi file not found at expected location.", "Setup Error");
-                    return;
-                }
-                string originalContent = ReadFileWithoutBOM(gameInfoPath);
-
-                // We now always ensure the search paths are up-to-date on setup.
-                UpdateGameInfoSearchPaths();
-
-                // Check for AddonConfig separately
-                if (!originalContent.Contains("AddonConfig"))
-                {
-                    string currentContent = ReadFileWithoutBOM(gameInfoPath);
-                    string addonConfig = "\nAddonConfig\n{\n\t\"UseOfficialAddons\" \"1\"\n}\n";
-
-                    // Find the end of the FileSystem block to append AddonConfig after it
-                    var fsMatch = Regex.Match(currentContent, @"(FileSystem\s*\{[\s\S]*?\})", RegexOptions.IgnoreCase);
-                    if (fsMatch.Success)
-                    {
-                        string fsBlock = fsMatch.Groups[1].Value;
-                        currentContent = currentContent.Replace(fsBlock, fsBlock + addonConfig);
-                        WriteFileWithoutBOM(gameInfoPath, currentContent);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to setup gameinfo.gi: {ex.Message}", "Setup Error");
-            }
-        }
-
-        // This method is now primarily a fallback for the very first run
-        private string ModifyGameInfoContent(string content)
-        {
-            var activeMods = LoadManifest();
-            // activeMods.Reverse(); // Reverse for priority
-
-            var newSearchPathsBlock = new StringBuilder();
-            newSearchPathsBlock.AppendLine("\tSearchPaths");
-            newSearchPathsBlock.AppendLine("\t{");
-            foreach (var mod in activeMods)
-            {
-                newSearchPathsBlock.AppendLine($"\t\tGame\t\t\tcitadel/addons/{mod.OriginalFolderName}");
-            }
-            newSearchPathsBlock.AppendLine("\t\tGame\t\t\tcitadel/addons");
-            newSearchPathsBlock.AppendLine("\t\tGame\t\t\tcitadel");
-            newSearchPathsBlock.AppendLine("\t\tWrite\t\t\tcitadel");
-            newSearchPathsBlock.AppendLine("\t\tGame\t\t\tcore");
-            newSearchPathsBlock.AppendLine("\t\tWrite\t\t\tcore");
-            newSearchPathsBlock.AppendLine("\t\tMod\t\t\tcore");
-            newSearchPathsBlock.AppendLine("\t}");
-
-            string pattern = @"(SearchPaths\s*\{[\s\S]*?\})";
-            if (Regex.IsMatch(content, pattern, RegexOptions.IgnoreCase))
-            {
-                return Regex.Replace(content, pattern, newSearchPathsBlock.ToString(), RegexOptions.IgnoreCase);
-            }
-            else // If no SearchPaths block exists, insert it
-            {
-                var fsMatch = Regex.Match(content, @"(FileSystem\s*\{)", RegexOptions.IgnoreCase);
-                if (fsMatch.Success)
-                {
-                    return content.Insert(fsMatch.Index + fsMatch.Length, "\n" + newSearchPathsBlock.ToString() + "\n");
-                }
-            }
-            return content; // Return original if FileSystem block not found
-        }
-
         #endregion
     }
 }
