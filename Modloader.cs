@@ -28,6 +28,7 @@ namespace Deadlock_Mod_Loader2
     public class ModLoader
     {
         private string gamePath;
+        private string citadelPath;
         private string activeModsPath;
         private string manifestPath;
         private string catalogPath;
@@ -45,10 +46,11 @@ namespace Deadlock_Mod_Loader2
             if (Directory.Exists(path) && Directory.Exists(Path.Combine(path, "citadel")))
             {
                 gamePath = path;
-                activeModsPath = Path.Combine(gamePath, "citadel", "addons");
+                citadelPath = Path.Combine(gamePath, "citadel");
+                activeModsPath = Path.Combine(citadelPath, "addons");
                 manifestPath = Path.Combine(activeModsPath, "active_mods.json");
                 catalogPath = Path.Combine(activeModsPath, "mods_catalog.json");
-                gameInfoPath = Path.Combine(gamePath, "citadel", "gameinfo.gi");
+                gameInfoPath = Path.Combine(citadelPath, "gameinfo.gi");
 
                 if (Directory.Exists(activeModsPath))
                 {
@@ -61,7 +63,121 @@ namespace Deadlock_Mod_Loader2
             return false;
         }
 
-        // ++ CHANGED ++ This method is now much more robust and handles loose VPK files.
+        // ++ CHANGED ++ This method is now more flexible to handle different ZIP structures.
+        public bool InstallDroppedFile(string filePath)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "DeadlockModLoader_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                string extension = Path.GetExtension(filePath).ToLowerInvariant();
+
+                if (extension == ".zip") ZipFile.ExtractToDirectory(filePath, tempDir);
+                else if (extension == ".rar" && !ExtractRarFile(filePath, tempDir)) return false;
+                else if (extension == ".7z" && !Extract7ZipFile(filePath, tempDir)) return false;
+                else if (extension == ".vpk") File.Copy(filePath, Path.Combine(tempDir, Path.GetFileName(filePath)));
+                else
+                {
+                    MessageBox.Show($"Unsupported file format: {extension}", "Unsupported Format");
+                    return false;
+                }
+
+                // --- NEW LOGIC: Check for 'citadel' or 'game/citadel' folder ---
+                string extractedCitadelPath = Path.Combine(tempDir, "citadel");
+                // ++ NEW ++ Also check for the nested structure.
+                if (!Directory.Exists(extractedCitadelPath))
+                {
+                    extractedCitadelPath = Path.Combine(tempDir, "game", "citadel");
+                }
+
+                if (Directory.Exists(extractedCitadelPath))
+                {
+                    bool success = true;
+                    MessageBox.Show("Content Pack detected. Installing maps, configs, and addons...", "Installer");
+
+                    string mapsSource = Path.Combine(extractedCitadelPath, "maps");
+                    if (Directory.Exists(mapsSource))
+                    {
+                        string mapsDest = Path.Combine(citadelPath, "maps");
+                        if (!Directory.Exists(mapsDest)) Directory.CreateDirectory(mapsDest);
+                        CopyDirectory(mapsSource, mapsDest);
+                    }
+
+                    string cfgSource = Path.Combine(extractedCitadelPath, "cfg");
+                    if (Directory.Exists(cfgSource))
+                    {
+                        string cfgDest = Path.Combine(citadelPath, "cfg");
+                        if (!Directory.Exists(cfgDest)) Directory.CreateDirectory(cfgDest);
+                        CopyDirectory(cfgSource, cfgDest);
+                    }
+
+                    string addonsSource = Path.Combine(extractedCitadelPath, "addons");
+                    if (Directory.Exists(addonsSource))
+                    {
+                        // Search for VPK files inside the addons source and process them.
+                        // This handles cases where the addon is in a subfolder like the example.
+                        var addonContentFolders = Directory.GetDirectories(addonsSource);
+                        if (addonContentFolders.Any())
+                        {
+                            foreach (var addonFolder in addonContentFolders)
+                            {
+                                if (!ProcessModContents(addonFolder, filePath))
+                                {
+                                    success = false; // If one fails, we still try others but report failure.
+                                }
+                            }
+                        }
+                        else if (Directory.GetFiles(addonsSource, "*.vpk").Any())
+                        {
+                            if (!ProcessModContents(addonsSource, filePath))
+                            {
+                                success = false;
+                            }
+                        }
+                    }
+                    return success;
+                }
+                else
+                {
+                    return ProcessModContents(tempDir, filePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to install: {ex.Message}", "Error");
+                return false;
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+        }
+
+        private void CopyDirectory(string sourceDir, string destinationDir)
+        {
+            var dir = new DirectoryInfo(sourceDir);
+            if (!dir.Exists)
+                throw new DirectoryNotFoundException($"Source directory not found: {dir.FullName}");
+
+            DirectoryInfo[] dirs = dir.GetDirectories();
+            Directory.CreateDirectory(destinationDir);
+
+            foreach (FileInfo file in dir.GetFiles())
+            {
+                string targetFilePath = Path.Combine(destinationDir, file.Name);
+                file.CopyTo(targetFilePath, true);
+            }
+
+            foreach (DirectoryInfo subDir in dirs)
+            {
+                string newDestinationDir = Path.Combine(destinationDir, subDir.Name);
+                CopyDirectory(subDir.FullName, newDestinationDir);
+            }
+        }
+
         public void ImportUnmanagedMods()
         {
             if (string.IsNullOrEmpty(activeModsPath) || !Directory.Exists(activeModsPath))
@@ -72,21 +188,18 @@ namespace Deadlock_Mod_Loader2
 
             int importedCount = 0;
 
-            // --- Part 1: Find and organize any loose VPK files ---
             var looseVpks = Directory.GetFiles(activeModsPath, "*.vpk", SearchOption.TopDirectoryOnly).ToList();
             if (looseVpks.Any())
             {
                 var vpkGroups = FindVpkGroups(looseVpks);
                 foreach (var group in vpkGroups)
                 {
-                    // Generate a name and folder for this group of loose files
                     string modName = group.BaseName.Replace("_", " ").Replace("-", " ");
                     modName = Regex.Replace(modName, @"\s+", " ").Trim();
                     string folderName = MakeSafeIdentifier(modName);
 
                     string newModSubFolder = Path.Combine(activeModsPath, folderName);
 
-                    // In case a folder with this name already exists, add a suffix
                     int suffix = 1;
                     while (Directory.Exists(newModSubFolder))
                     {
@@ -94,7 +207,6 @@ namespace Deadlock_Mod_Loader2
                     }
                     Directory.CreateDirectory(newModSubFolder);
 
-                    // Move the loose files into their new home
                     foreach (var vpkFile in group.Files)
                     {
                         try
@@ -110,7 +222,6 @@ namespace Deadlock_Mod_Loader2
                 }
             }
 
-            // --- Part 2: Discover and process all unmanaged folders (including newly created ones) ---
             var manifest = LoadManifest();
             var catalog = LoadCatalog();
             var managedFolders = manifest.Select(m => m.OriginalFolderName)
@@ -456,65 +567,6 @@ namespace Deadlock_Mod_Loader2
                           .ToList();
         }
 
-        public bool InstallDroppedFile(string filePath)
-        {
-            bool isDirectory = File.GetAttributes(filePath).HasFlag(FileAttributes.Directory);
-            string tempDir = isDirectory ? filePath : Path.Combine(Path.GetTempPath(), "DeadlockModLoader_" + Guid.NewGuid().ToString("N"));
-
-            try
-            {
-                if (!isDirectory)
-                {
-                    Directory.CreateDirectory(tempDir);
-                    string extension = Path.GetExtension(filePath).ToLowerInvariant();
-
-                    if (extension == ".zip")
-                    {
-                        ZipFile.ExtractToDirectory(filePath, tempDir);
-                    }
-                    else if (extension == ".rar")
-                    {
-                        if (!ExtractRarFile(filePath, tempDir))
-                        {
-                            MessageBox.Show("RAR extraction failed. Please install WinRAR or 7-Zip, or convert to ZIP format.", "RAR Extraction Error");
-                            return false;
-                        }
-                    }
-                    else if (extension == ".7z")
-                    {
-                        if (!Extract7ZipFile(filePath, tempDir))
-                        {
-                            MessageBox.Show("7Z extraction failed. Please install 7-Zip or convert to ZIP format.", "7Z Extraction Error");
-                            return false;
-                        }
-                    }
-                    else if (extension == ".vpk")
-                    {
-                        File.Copy(filePath, Path.Combine(tempDir, Path.GetFileName(filePath)));
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Unsupported file format: {extension}\nSupported formats: .zip, .rar, .7z, .vpk", "Unsupported Format");
-                        return false;
-                    }
-                }
-
-                return ProcessModContents(tempDir, filePath);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to install mod: {ex.Message}", "Error");
-                return false;
-            }
-            finally
-            {
-                if (!isDirectory && Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, true);
-                }
-            }
-        }
-
         private bool ExtractRarFile(string rarPath, string extractPath)
         {
             try
@@ -611,6 +663,7 @@ namespace Deadlock_Mod_Loader2
         private bool ProcessModContents(string tempDir, string originalFilePath)
         {
             var modInfo = new ModInfo();
+            bool modInfoFileFound = false;
 
             string modJsonPath = Directory.GetFiles(tempDir, "modinfo.json", SearchOption.AllDirectories).FirstOrDefault();
 
@@ -626,6 +679,7 @@ namespace Deadlock_Mod_Loader2
 
             if (!string.IsNullOrEmpty(modJsonPath))
             {
+                modInfoFileFound = true;
                 try
                 {
                     var parsed = JsonConvert.DeserializeObject<ModInfo>(File.ReadAllText(modJsonPath));
@@ -668,6 +722,20 @@ namespace Deadlock_Mod_Loader2
             if (string.IsNullOrWhiteSpace(modInfo.Author)) modInfo.Author = "Unknown";
             if (string.IsNullOrWhiteSpace(modInfo.Description)) modInfo.Description = "A mod installed without a modinfo file.";
             modInfo.FolderName = MakeSafeIdentifier(modInfo.Name);
+
+            if (!modInfoFileFound)
+            {
+                try
+                {
+                    string newModJsonPath = Path.Combine(tempDir, "modinfo.json");
+                    string generatedJson = JsonConvert.SerializeObject(modInfo, Formatting.Indented);
+                    File.WriteAllText(newModJsonPath, generatedJson);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not create a default modinfo.json file for the imported mod.\n\nError: {ex.Message}", "Import Warning");
+                }
+            }
 
             var manifest = LoadManifest();
             if (manifest.Any(m => m.OriginalFolderName.Equals(modInfo.FolderName, StringComparison.OrdinalIgnoreCase)))
