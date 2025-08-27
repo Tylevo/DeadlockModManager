@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{E42A089B-6A37-4EBF-B6EA-086D6C7E8F05}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Deadlock_Mod_Loader2</RootNamespace>
+    <AssemblyName>Deadlock Mod Manager</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    
+    <!-- CRITICAL: These prevent auto-generation of assembly attributes -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+    <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+    <GenerateAssemblyTrademarkAttribute>false</GenerateAssemblyTrademarkAttribute>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=8.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.8.0.0\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpCompress, Version=0.40.0.0, Culture=neutral, PublicKeyToken=afb0a02973931d96, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpCompress.0.40.0\lib\netstandard2.0\SharpCompress.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Buffers, Version=4.0.4.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Buffers.4.6.0\lib\net462\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Core" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Memory, Version=4.0.2.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Memory.4.6.0\lib\net462\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors, Version=4.1.5.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Numerics.Vectors.4.6.0\lib\net462\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.6.1.0\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Text.Encoding.CodePages, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Text.Encoding.CodePages.8.0.0\lib\net462\System.Text.Encoding.CodePages.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.2.0.1, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Threading.Tasks.Extensions.4.5.4\lib\net461\System.Threading.Tasks.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="ZstdSharp, Version=0.8.5.0, Culture=neutral, PublicKeyToken=8d151af33a4ad5cf, processorArchitecture=MSIL">
+      <HintPath>..\packages\ZstdSharp.Port.0.8.5\lib\net462\ZstdSharp.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AnimationSystem.cs" />
+    <Compile Include="CollectionInstallForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Form1.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="GameBananaAdvancedSearch.cs" />
+    <Compile Include="GameBananaBrowser.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="GameBananaCategoryFilter.cs" />
+    <Compile Include="GameBananaModels.cs" />
+    <Compile Include="GameBananaSearchService.cs" />
+    <Compile Include="GameInfoPatcher.cs" />
+    <Compile Include="GameSetupTabBuilder.cs" />
+    <Compile Include="modactivator.cs" />
+    <Compile Include="ModAnalyzer.cs" />
+    <Compile Include="ModCatalogManager.cs" />
+    <Compile Include="modinstaller.cs" />
+    <Compile Include="Modloader.cs" />
+    <Compile Include="ModsTabBuilder.cs" />
+    <Compile Include="Modtype.cs" />
+    <Compile Include="profilemanager.cs" />
+    <Compile Include="ProfilesTabBuilder.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Settings.cs" />
+    <Compile Include="NotificationManager.cs" />
+    <Compile Include="ThemeSystem.cs" />
+    <Compile Include="UIControls.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="UpdateChecker.cs" />
+    <None Include="app.manifest" />
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\deadlock.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Deadlock Mod Manager.png" />
+  </ItemGroup>
+  
+  <!-- ANTI-AV BUILD AUTOMATION - Fixed Version -->
+  
+  <!-- Step 1: Organize DLLs into libs folder -->
+  <Target Name="OrganizeDLLs" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <LibsDir>$(OutputPath)libs</LibsDir>
+    </PropertyGroup>
+    
+    <MakeDir Directories="$(LibsDir)" Condition="!Exists('$(LibsDir)')" />
+    
+    <ItemGroup>
+      <DLLsToMove Include="$(OutputPath)*.dll" />
+    </ItemGroup>
+    
+    <Copy SourceFiles="@(DLLsToMove)" DestinationFolder="$(LibsDir)" SkipUnchangedFiles="true" />
+    <Delete Files="@(DLLsToMove)" />
+    
+    <Message Text="Anti-AV: Organized DLLs into libs folder" Importance="high" />
+  </Target>
+  
+  <!-- Step 2: Create professional release package -->
+  <Target Name="CreateReleasePackage" AfterTargets="OrganizeDLLs" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <ReleaseDir>$(MSBuildProjectDirectory)\Release-Community</ReleaseDir>
+      <ExeName>$(AssemblyName).exe</ExeName>
+    </PropertyGroup>
+    
+    <!-- Clean and create release directory -->
+    <RemoveDir Directories="$(ReleaseDir)" Condition="Exists('$(ReleaseDir)')" />
+    <MakeDir Directories="$(ReleaseDir)" />
+    <MakeDir Directories="$(ReleaseDir)\libs" />
+    
+    <!-- Copy main executable -->
+    <Copy SourceFiles="$(OutputPath)$(ExeName)" DestinationFolder="$(ReleaseDir)" />
+    
+    <!-- Copy config file if it exists -->
+    <Copy SourceFiles="$(OutputPath)$(ExeName).config" DestinationFolder="$(ReleaseDir)" Condition="Exists('$(OutputPath)$(ExeName).config')" />
+    
+    <!-- Copy all DLLs from libs folder -->
+    <ItemGroup>
+      <LibFiles Include="$(OutputPath)libs\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(LibFiles)" DestinationFolder="$(ReleaseDir)\libs" />
+    
+    <Message Text="Anti-AV: Created release package at $(ReleaseDir)" Importance="high" />
+  </Target>
+  
+  <!-- Step 3: Create documentation using echo commands (most reliable) -->
+  <Target Name="CreateDocumentation" AfterTargets="CreateReleasePackage" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <ReleaseDir>$(MSBuildProjectDirectory)\Release-Community</ReleaseDir>
+    </PropertyGroup>
+    
+    <!-- Create README using echo commands -->
+    <Exec Command="echo # Deadlock Mod Manager v1.4.0 > &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo **Community-driven mod management tool for Deadlock** >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo ## What is this? >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo This is a legitimate, open-source mod manager for Deadlock. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo It helps you install, manage, and organize game modifications safely. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo ## Is this safe? >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Open Source: https://github.com/Tylevo/DeadlockModManager >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Community Project: Made by Deadlock fans for Deadlock fans >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - No Malware: Just a simple mod management tool >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Portable: Doesn't modify system files or registry >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo ## Windows Security Warning? >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo This is normal for community software without expensive code signing. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo Click 'More info' then 'Run anyway' if you trust the source. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo ## Installation: >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo IMPORTANT: If you've used other mod managers before, delete gameinfo.gi first! >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo Steam ^> Deadlock ^> Properties ^> Installed Files ^> Browse ^> game/citadel/ ^> Delete gameinfo.gi >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo 1. Extract ALL files to a folder ^(IMPORTANT: Don't skip this!^) >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo 2. Run 'Deadlock Mod Manager.exe' >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo 3. Point it to your Deadlock installation directory >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo 4. Start managing your mods! >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo ## Features: >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Install mods from ZIP files or GameBanana >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Organize mods with profiles >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Enable/disable mods easily >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Automatic mod validation >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Clean, modern interface >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo ## Support: >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - Discord: https://discord.gg/P2PCCtYt2B >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - GameBanana: https://gamebanana.com/tools/20525 >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo - GitHub: https://github.com/Tylevo/DeadlockModManager/issues >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    <Exec Command="echo ## File Verification: >> &quot;$(ReleaseDir)\README.txt&quot;" />
+    
+    <!-- Create MIT License using echo commands -->
+    <Exec Command="echo MIT License > &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo Copyright ^(c^) 2025 Tylevo and Contributors >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo Permission is hereby granted, free of charge, to any person obtaining >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo a copy of this software and associated documentation files ^(the 'Software'^), >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo to deal in the Software without restriction, including without limitation >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo the rights to use, copy, modify, merge, publish, distribute, sublicense, >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo and/or sell copies of the Software, and to permit persons to whom the >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo Software is furnished to do so, subject to the following conditions: >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo The above copyright notice and this permission notice shall be included >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo in all copies or substantial portions of the Software. >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo. >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    <Exec Command="echo OTHER DEALINGS IN THE SOFTWARE. >> &quot;$(ReleaseDir)\LICENSE.txt&quot;" />
+    
+    <!-- Create version file -->
+    <Exec Command="echo 1.4.0 > &quot;$(ReleaseDir)\version.txt&quot;" />
+    
+    <Message Text="Anti-AV: Created README.txt, LICENSE.txt, and version.txt using echo commands" Importance="high" />
+  </Target>
+  
+  <!-- Step 4: Generate SHA-256 hash for transparency -->
+  <Target Name="GenerateHash" AfterTargets="CreateDocumentation" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <ReleaseDir>$(MSBuildProjectDirectory)\Release-Community</ReleaseDir>
+      <ExeName>$(AssemblyName).exe</ExeName>
+    </PropertyGroup>
+    
+    <!-- Generate SHA-256 hash and append to README -->
+    <Exec Command="certutil -hashfile &quot;$(ReleaseDir)\$(ExeName)&quot; SHA256 >> &quot;$(ReleaseDir)\README.txt&quot;" 
+          ContinueOnError="true" />
+    
+    <!-- Also create separate hash file -->
+    <Exec Command="certutil -hashfile &quot;$(ReleaseDir)\$(ExeName)&quot; SHA256 > &quot;$(ReleaseDir)\SHA256.txt&quot;" 
+          ContinueOnError="true" />
+          
+    <Message Text="Anti-AV: Generated SHA-256 hash files" Importance="high" />
+  </Target>
+  
+  <!-- Final summary -->
+  <Target Name="ReleaseSummary" AfterTargets="GenerateHash" Condition="'$(Configuration)' == 'Release'">
+    <Message Text="========================================" Importance="high" />
+    <Message Text="ANTI-AV RELEASE BUILD COMPLETE!" Importance="high" />
+    <Message Text="========================================" Importance="high" />
+    <Message Text="Release package: $(MSBuildProjectDirectory)\Release-Community\" Importance="high" />
+    <Message Text="Files created: README.txt, LICENSE.txt, version.txt, SHA256.txt" Importance="high" />
+    <Message Text="Features applied:" Importance="high" />
+    <Message Text="- Professional assembly metadata" Importance="high" />
+    <Message Text="- Clean DLL organization (libs folder)" Importance="high" />
+    <Message Text="- No admin rights required" Importance="high" />
+    <Message Text="- SHA-256 hash for transparency" Importance="high" />
+    <Message Text="- MIT License included" Importance="high" />
+    <Message Text="- Professional documentation" Importance="high" />
+    <Message Text="Ready for distribution!" Importance="high" />
+    <Message Text="========================================" Importance="high" />
+  </Target>
+  
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
